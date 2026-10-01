@@ -11,7 +11,8 @@ Why BFS is appropriate:
 """
 
 from collections import deque
-from typing import List, Tuple, Optional, Dict
+import sys
+from typing import List, Tuple, Optional
 
 # The Warehouse Map as specified in the lab problem
 WAREHOUSE_MAP = [
@@ -110,6 +111,20 @@ class GoalBasedAgent:
 
         return None
 
+    def path_to_actions(self, path: List[Tuple[int, int]]) -> List[str]:
+        """Translates a list of grid coordinates into a sequence of named cardinal actions."""
+        if not path or len(path) < 2:
+            return []
+        actions = []
+        for i in range(len(path) - 1):
+            cur_r, cur_c = path[i]
+            next_r, next_c = path[i + 1]
+            for dr, dc, name in self.ACTIONS:
+                if (cur_r + dr, cur_c + dc) == (next_r, next_c):
+                    actions.append(name)
+                    break
+        return actions
+
     def execute_plan(self):
         """Plans and prints the navigation result."""
         print("=" * 60)
@@ -127,16 +142,7 @@ class GoalBasedAgent:
         if path:
             print(f"\n[SUCCESS] Path found in {len(path) - 1} steps!")
             
-            # Translate coordinates to action sequence
-            action_sequence = []
-            for i in range(len(path) - 1):
-                cur_r, cur_c = path[i]
-                next_r, next_c = path[i + 1]
-                for dr, dc, name in self.ACTIONS:
-                    if (cur_r + dr, cur_c + dc) == (next_r, next_c):
-                        action_sequence.append(name)
-                        break
-
+            action_sequence = self.path_to_actions(path)
             print(f"\nAction Sequence ({len(action_sequence)} actions):")
             print(" -> ".join(action_sequence))
 
@@ -151,7 +157,67 @@ class GoalBasedAgent:
         print("=" * 60)
 
 
-if __name__ == "__main__":
+def run_self_tests():
+    """Runs a battery of unit and edge-case tests to validate the agent."""
+    print("Running self-tests for Warehouse Navigation Agent...")
+
+    # Test 1: Baseline Map
     env = WarehouseEnvironment(WAREHOUSE_MAP)
     agent = GoalBasedAgent(env)
-    agent.execute_plan()
+    path = agent.search_path()
+    assert path is not None, "Baseline path should exist"
+    assert len(path) - 1 == 20, f"Expected 20 steps, got {len(path) - 1}"
+    assert path[0] == env.start, "Path must start at S"
+    assert path[-1] == env.goal, "Path must end at G"
+    for r, c in path:
+        assert env.grid[r][c] != '#', f"Path collides with obstacle at ({r}, {c})"
+    print("  [PASS] Test 1: Baseline navigation path and collision avoidance verified.")
+
+    # Test 2: Unreachable Goal
+    blocked_map = [
+        "#####",
+        "#S#G#",
+        "#####"
+    ]
+    blocked_env = WarehouseEnvironment(blocked_map)
+    blocked_agent = GoalBasedAgent(blocked_env)
+    assert blocked_agent.search_path() is None, "Expected None for unreachable goal"
+    print("  [PASS] Test 2: Unreachable goal handled correctly.")
+
+    # Test 3: Start equals Goal (agent already at destination)
+    same_map = [
+        "#####",
+        "#S.G#",
+        "#####"
+    ]
+    same_env = WarehouseEnvironment(same_map)
+    same_agent = GoalBasedAgent(same_env)
+    same_agent.current_state = same_env.goal  # start equals goal
+    same_path = same_agent.search_path()
+    assert same_path == [same_env.goal], "Path should be just [goal] when start == goal"
+    assert same_agent.path_to_actions(same_path) == [], "Action sequence should be empty"
+    print("  [PASS] Test 3: Start equals Goal handled correctly.")
+
+    # Test 4: Missing start or goal validation
+    missing_map = [
+        "#####",
+        "#..G#",
+        "#####"
+    ]
+    try:
+        WarehouseEnvironment(missing_map)
+        assert False, "Expected ValueError for missing Start 'S'"
+    except ValueError:
+        pass
+    print("  [PASS] Test 4: Missing start/goal error handling verified.")
+
+    print("\nAll self-tests passed successfully!")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] in ("--test", "-t"):
+        run_self_tests()
+    else:
+        env = WarehouseEnvironment(WAREHOUSE_MAP)
+        agent = GoalBasedAgent(env)
+        agent.execute_plan()
